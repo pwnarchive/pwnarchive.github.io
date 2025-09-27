@@ -1,0 +1,21 @@
+.lang-toggle {
+  margin: 1rem 0;
+  text-align: center;
+}
+
+.toggle-btn {
+  display: inline-block;
+  background: #222; /* dark gray to match Chirpy sidebar */
+  color: #f0f0f0;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  transition: all 0.2s ease;
+}
+
+.toggle-btn:hover {
+  background: #444;
+  transform: translateY(-2px);
+}

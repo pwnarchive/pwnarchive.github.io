@@ -220,3 +220,18 @@ jekyll-archives:
   permalinks:
     tag: /tags/:name/
     category: /categories/:name/
+
+comments:
+  provider: giscus
+  giscus:
+    repo: pwnarchive/pwnarchive.github.io
+    repo_id: "R_kgDOP0nnrA"
+    category: "Announcements"
+    category_id: "DIC_kwDOP0nnrM4Cvxof"
+    mapping: pathname
+    strict: 0
+    reactions_enabled: 1
+    emit_metadata: 0
+    input_position: bottom
+    theme: preferred_color_scheme
+    lang: en
