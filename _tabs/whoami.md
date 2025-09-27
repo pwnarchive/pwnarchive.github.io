@@ -17,5 +17,5 @@ It’s not meant to be perfect, just notes from my journey as I keep developing 
 >All techniques, commands, and examples shared on this blog are provided **strictly for educational purposes**. They are intended for me to understand better the concepts and to help readers understand cybersecurity concepts, defensive strategies, and attacker methodologies.
 >
 >**Do not attempt to use these techniques on systems you do not own or have explicit permission to test.** Unauthorized access or misuse of these methods is illegal and unethical.
->By continuing to read this blog, you acknowledge that you are responsible for how you apply this knowledge.
+>By continuing to read this blog, you acknowledge that you are responsible for how you apply this knowledge. 
 {: .prompt-warning }
