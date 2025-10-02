@@ -12,7 +12,9 @@ description: Expressway HTB Writeup
 image:
   path: '/assets/img/images/posts/expressway/Pasted image 20251001183550.png'
 ---
+### Summary
 
+Expressway is an HTB machine that exploits IKE aggressive mode, which exposes the PSK hash during the handshake on cleartext. Cracking this hash reveals valid VPN credentials, which, due to password reuse also grant SSH access. After logging in, a vulnerable sudo version is leveraged to escalate privileges to root.  
 ### Expressway Writeup
 
 We start with Nmap to check for open ports
@@ -23,23 +25,28 @@ to get more details about version of SSH `-p 22 -sVC` to check for any outdated 
 
 ![[2025-10-01_21-45.png]]({{ "assets/img/images/posts/expressway/2025-10-01_21-45.png" | relative_url }}){: width="85%" }
 
-As this does not seem to be a way in (but at least we can confirm we have a `Debian` target based on the output.) we can also try to check for UDP ports, I found port 500 which Nmap says is probably the service `isakmp` (**Internet Security Association and Key Management Protocol**), having that port open
+As this does not seem to be a way in (but at least we can confirm we have a `Debian` target based on the output.) we can also try to check for UDP ports, I found port 500 which Nmap says is probably the service `isakmp` (**Internet Security Association and Key Management Protocol**), having that port open.
 
 ![[2025-10-01_21-51.png]]({{ "assets/img/images/posts/expressway/2025-10-01_21-51.png" | relative_url }}){: width="85%" }
 
-I found this useful cheat sheet on [Hacktricks](https://book.hacktricks.wiki/en/network-services-pentesting/ipsec-ike-vpn-pentesting.html) about pentesting port `500`.
+I found this useful cheat sheet on [Hacktricks](https://book.hacktricks.wiki/en/network-services-pentesting/ipsec-ike-vpn-pentesting.html) about pentesting port `500 (IKE/IPsec)`.
 
-Output:
+**Description from manual**  
+`ike-scan - Discover and fingerprint IKE hosts (IPsec VPN servers)`
+
+we can use this tool to be able to interact with the service. In this case using `-M` option gives multi-line output which can help for readability.
+
+**Output**
 ![[Screenshot From 2025-10-01 21-52-23.png]]({{ "assets/img/images/posts/expressway/Screenshot From 2025-10-01 21-52-23.png" | relative_url }}){: width="85%" }
 
 `1 returned handshake; 0 returned notify: This means the target is configured for IPsec and is willing to perform IKE negotiation.`
 
 ### Before proceeding let's take a moment to understand IKE.
 
-**IKE (Internet Key Exchange)** is the protocol used to establish secure tunnels in IPsec VPNs. It operates in two modes
+**IKE (Internet Key Exchange)** is the protocol used to establish secure tunnels in IPsec VPNs. It operates in two modes.
 
-**Main Mode**
-it builds the IKE Security Association in six steps. First, the initiator sends proposals for encryption and authentication, and the responder picks one. Then they exchange Diffie-Hellman keys and other data to create a shared secret. Finally, both sides authenticate each other. After this, the channel is encrypted, and IPSec negotiation (Quick Mode) begins.
+**Main Mode**  
+it builds the IKE Security Association in six steps. First, the initiator sends proposals for encryption and authentication, and the responder picks one. Then they exchange Diffie-Hellman keys and other data to create a shared secret. Finally, both sides authenticate each other. Identities and authentication data are encrypted, because the secure channel is established **before any sensitive information is exchanged**. After this, IPSec negotiation begins.
 
 **Aggressive Mode**  
 sets up the IKE Security Association in just three messages, which makes it faster than Main Mode. The initiator sends all its details first, the responder replies with its proposal, key exchange data, and identity, and then the initiator confirms. Quick and simple. but here’s the problem, both identities are sent in plain text before the channel is secure.
@@ -62,12 +69,12 @@ also we get
 
 To crack the hash we use `psk-crack` specify wordlist with `-d` and the `hash` file we captured
 
-after cracking we get
+after cracking we get  
 `freakingrockstarontheroad`
 
-And use it to SSH to the target.
-
 ![[Screenshot From 2025-10-01 21-55-58.png]]({{ "assets/img/images/posts/expressway/Screenshot From 2025-10-01 21-55-58.png" | relative_url }}){: width="85%" }
+
+And we can use it to SSH to the target.
 
 ![[Screenshot From 2025-10-01 21-56-51.png]]({{ "assets/img/images/posts/expressway/Screenshot From 2025-10-01 21-56-51.png" | relative_url }}){: width="85%" }
 
@@ -83,7 +90,15 @@ And with a little bit of help from `searchsploit`.
 
 to our pleasant surprise it is vulnerable.
 
-to get root we can use this exploit CVE-2025-32463.
+to get root we can use this exploit **CVE-2025-32463**.
+
+But before that a short explanation of what is going on under the hood.
+
+>CVE-2025-32463 is a vulnerability in `sudo` where the `-R` (chroot) option is not properly secured. When `sudo` uses `-R`, it changes its root directory before completing all security checks. 
+>
+>This allows an attacker to create a fake environment with a malicious `nsswitch.conf` and a crafted `libnss_*.so` library. During execution, `sudo` loads this library inside the chroot, which runs as root, giving the attacker full privilege escalation.
+{: .prompt-info }
+
 
 ```bash
 #!/bin/bash
@@ -125,6 +140,17 @@ command
 rm -rf "$STAGE"
 ```
 
+After saving to `exploit.sh` and running...
 ![[Screenshot From 2025-10-01 21-59-56 3.png]]({{ "assets/img/images/posts/expressway/Screenshot From 2025-10-01 21-59-56 3.png" | relative_url }}){: width="85%" }
 
-And we get root.
+We get **root**.
+
+![yay](https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExd2h1NTZ0am1saTJ6djZ1bThhYWNmMW0yMnVidHRlY3Y4MWhyNTA2aSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/G1vplGMypxBcp7kx32/giphy.gif)
+
+### How to prevent these vulnerabilities
+
+1. Avoid using Aggressive Mode for IPsec VPNs, as it exposes sensitive data.
+
+2. Do not reuse credentials across services. 
+   
+3. Keep systems and software updated to patch known vulnerabilities.
