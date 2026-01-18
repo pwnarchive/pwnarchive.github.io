@@ -1185,7 +1185,7 @@ This enables persistence and lateral movement even if the actual service account
   [Kerberos authentication a simple guide for security pros | HTB](https://www.hackthebox.com/blog/what-is-kerberos-authentication)
 
 - Abusing Kerberos  
-  [Abusing kerberos | gentilkiwi](http://www.slideshare.net/gentilkiwi/abusing-microsoft-kerberos-sorry-you-guys-dont-get-it)
+  [Abusing kerberos | gentilkiwi](https://www.slideshare.net/gentilkiwi/abusing-microsoft-kerberos-sorry-you-guys-dont-get-it)
 
 - Kerberos basic explanation  
   [Fortinet community](https://community.fortinet.com/t5/FortiGate/Technical-Tip-A-basic-explanation-of-Kerberos-Authentication/ta-p/399506)
