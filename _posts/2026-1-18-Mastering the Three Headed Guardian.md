@@ -10,7 +10,10 @@ tags:
   - kerberos
   - kerberoasting
   - offensive
-  - ActiveDirectory
+  - Active Directory
+  - Active Directory Security
+  - mimikatz
+  - privilege escalation
 description: Making kerberos easy for you and understanding how attacks work.
 image:
   path: /assets/img/images/posts/mastering_kerberos/kerberos.png
@@ -1002,28 +1005,119 @@ C:\> type \\FILESERVER01\C$\Confidential\budget.xlsx
 
 > Impersonate another user to access a resource
 
-Kerberos Delegation allows a service to impersonate a user to access another resource. Authentication is delegated, and the final resource responds to the service as if it had the first user's rights. 
+Kerberos Delegation enables a service to act on behalf of a user and access another resource. In this process, authentication rights are passed along, allowing the final resource to respond as though the original user made the request directly.
 
-There are different types of delegation, each with weaknesses that may allow an attacker to impersonate users to leverage other services.
+Several types of delegation exist, and each contains vulnerabilities that an attacker could exploit to impersonate users and gain access to additional services.
 
 #### 1. Unconstrained delegation
 
 > Impersonate users
 
-Unconstrained delegation allows a service to impersonate a user when accessing any other service. This is a very dangerous privilege, therefore, not any user can grant it.
+Unconstrained delegation is the highest level of delegation in Kerberos. When granted to a service account, it allows that service to impersonate an authenticated user t**o any other service or server in the domain**. Essentially, the service receives the user's full Ticket-Granting Ticket (TGT), which it can use to request access tickets for any resource on the user's behalf.
 
-For an account to have an unconstrained delegation, on the “Delegation” tab of the account, the “trust this computer for delegation to any service (Kerberos only)” option must be selected.
+This is an extremely risky privilege because:
 
-Only an administrator or a privileged user to whom these privileges have been explicitly given can set this option to other accounts. More specifically, it is necessary to have the SeEnableDelegationPrivilege privilege to perform this action. A service account cannot modify itself to add this option.
+- **Total Impersonation**  
+  A compromised service with unconstrained delegation can act as any user that authenticates to it, potentially accessing any resource in the domain.
+    
+- **Credential Exposure**  
+  The service caches the user's TGT. If an attacker compromises that service, they can steal these TGTs and use them to move laterally across the network with the rights of the impersonated users.
+
+Unconstrained delegation is not enabled by default and requires high privileges to assign.
+
+1. On a user or computer account in Active Directory, the setting is found on the **Delegation** tab.
+
+2. The specific option is: **"Trust this computer for delegation to any service (Kerberos only)".**
+
+3. Only a user holding the **`SeEnableDelegationPrivilege`** (typically Domain Admins) can enable this setting.
+   
+4. **A service account cannot grant itself this privilege;** it must be configured by a privileged administrator.
+
+>Due to its inherent risk, modern security practice strongly discourages the use of unconstrained delegation. More secure constrained delegation should be used whenever possible.
+{: prompt-info }
 
 #### 2. Constrained delegation
 
 > A restrictive version 
 
-Constrained delegation is a “more restrictive” version of unconstrained delegation. In this case, a service has the right to impersonate a user to a well-defined list of services.
+Constrained delegation is a security mechanism in Active Directory that allows a service to impersonate a user, but only to a **specific, pre-defined list of services**. Unlike unconstrained delegation (which allows impersonation to any service), constrained delegation follows the principle of least privilege by restricting where delegated credentials can be used.
 
-A constrained delegation can be configured in the same place as an unconstrained delegation in the Delegation tab of the service account. The “trust this computer for delegation to specified services only” option should be chosen.
+- Set in Active Directory on the **Delegation tab** of a service account
+  
+- Requires **"Trust this computer for delegation to specified services only"**
+      
+- Administrator must specify **exact Service Principal Names (SPNs)** that the account can delegate to (e.g., `MSSQLSvc/dbserver.domain.local:1433`)
 
+- Requires `SeEnableDelegationPrivilege` (typically held by Domain Admins)
+
+- Service accounts **cannot** self-configure delegation privileges
+
+##### Security Improvements Over Unconstrained Delegation
+
+- **Reduced Attack Surface**: Limits lateral movement to only specified services
+
+- **Controlled Access**: Prevents unlimited credential forwarding across the domain
+
+- **Explicit Authorization**: Each target service must be explicitly listed in the delegation configuration
+
+##### Attack Vectors Against Constrained Delegation
+
+Despite being more secure than unconstrained delegation, constrained delegation remains vulnerable to several attack techniques:
+
+### ** Protocol Transition Abuse (S4U2Self/S4U2Proxy Attack)**
+
+An attacker compromises a service account (`WebSvc`) configured for constrained delegation to `SQLSvc/dbserver`.
+
+1. Use `WebSvc`'s credentials to perform **S4U2Self** and obtain a Service Ticket to `WebSvc` for any user (including Domain Admins) without their password
+
+2. Use that ticket with **S4U2Proxy** to request a Service Ticket to the authorized target `SQLSvc/dbserver` as the impersonated user
+
+3. Access the database server with the elevated user's privileges
+
+This Allows attackers to impersonate high-privilege users to the delegated services.
+
+##### Resource-Based Constrained Delegation (RBCD) Exploitation
+
+If an attacker gains write permissions (`GenericWrite`, `GenericAll`) on a computer account (`VictimPC$`) through ACL abuse or group membership.
+
+**Attack Process**:
+
+1. Modify the `VictimPC$` account's `msDS-AllowedToActOnBehalfOfOtherIdentity` attribute to allow delegation from a compromised service account (`AttackerSvc$`)
+    
+2. Perform S4U2Self to obtain a ticket to `AttackerSvc$` as a privileged user
+    
+3. Use S4U2Proxy to request access to `VictimPC$` as that privileged user
+    
+4. Gain local administrator access to the victim computer
+    
+
+This enables privilege escalation and lateral movement by reconfiguring delegation settings.
+
+##### Silver Ticket Attacks with Delegation Rights
+
+If an attacker compromises a service account's password hash.
+
+**Attack Process**:
+
+1. Forge a Silver Ticket (service ticket) for the compromised service
+    
+2. If the service has constrained delegation rights, use the forged ticket in S4U2Proxy attacks
+    
+3. Bypass some detection mechanisms since the ticket appears legitimate
+    
+
+This enables persistence and lateral movement even if the actual service account password is changed.
+
+### **Detection Methods**
+
+1. **Monitor for S4U2Self/S4U2Proxy Events**: Look for Event ID 4649 ("A replay attack was detected") and 4769 (Kerberos service ticket requests) with specific flags
+    
+2. **Audit Delegation Configuration Changes**: Track modifications to delegation settings (Event ID 4738 for user accounts)
+    
+3. **Analyze Kerberos Ticket Requests**: Identify unusual patterns of service ticket requests between services
+
+>While constrained delegation is significantly more secure than unconstrained delegation, it remains a powerful feature that requires careful configuration, continuous monitoring, and adherence to the principle of least privilege to prevent abuse by attackers.
+{: prompt-tip }
 
 ### How to defend
 
@@ -1091,7 +1185,7 @@ A constrained delegation can be configured in the same place as an unconstrained
   [Kerberos authentication a simple guide for security pros | HTB](https://www.hackthebox.com/blog/what-is-kerberos-authentication)
 
 - Abusing Kerberos  
-  [Abusing kerberos | gentilkiwi](https://www.slideshare.net/gentilkiwi/abusing-microsoft-kerberos-sorry-you-guys-dont-get-it)
+  [Abusing kerberos | gentilkiwi](http://www.slideshare.net/gentilkiwi/abusing-microsoft-kerberos-sorry-you-guys-dont-get-it)
 
 - Kerberos basic explanation  
   [Fortinet community](https://community.fortinet.com/t5/FortiGate/Technical-Tip-A-basic-explanation-of-Kerberos-Authentication/ta-p/399506)
